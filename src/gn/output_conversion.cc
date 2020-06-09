@@ -70,6 +70,50 @@ void RenderScopeToJSON(const Value& output, std::ostream& out, int indent) {
   out << "}";
 }
 
+// Forward declare so it can be used recursively.
+void RenderScopeToYAML(const Value& output, std::ostream& out, int indent, bool list_element);
+
+void RenderListToYAML(const Value& output, std::ostream& out, int indent, bool list_element) {
+  assert(indent >= 0);
+  if (!list_element) {
+    out << "\n";
+  }
+  bool first = true;
+  for (const auto& value : output.list_value()) {
+    if (!(list_element & first))
+        Indent(indent, out);
+    out << "- ";
+    if (value.type() == Value::SCOPE) {
+      RenderScopeToYAML(value, out, indent + 1, true);
+    }
+    else if (value.type() == Value::LIST) {
+      RenderListToYAML(value, out, indent + 1, true);
+    } else
+      out << value.ToString(true) << "\n";
+    first = false;
+  }
+}
+
+void RenderScopeToYAML(const Value& output, std::ostream& out, int indent, bool list_element) {
+  assert(indent >= 0);
+  Scope::KeyValueMap scope_values;
+  output.scope_value()->GetCurrentScopeValues(&scope_values);
+  bool first = true;
+  for (const auto& pair : scope_values) {
+    if (!(list_element & first))
+        Indent(indent, out);
+    out << pair.first << ":";
+    if (pair.second.type() == Value::SCOPE) {
+      out << "\n";
+      RenderScopeToYAML(pair.second, out, indent + 1, false);
+    } else if (pair.second.type() == Value::LIST)
+      RenderListToYAML(pair.second, out, indent + 1, false);
+    else
+      out << " " << pair.second.ToString(true) << "\n";
+    first = false;
+  }
+}
+
 void OutputListLines(const Value& output, std::ostream& out) {
   assert(output.type() == Value::LIST);
   const std::vector<Value>& list = output.list_value();
@@ -126,6 +170,18 @@ void OutputJSON(const Value& output, std::ostream& out) {
   ToStringQuoted(output, out);
 }
 
+void OutputYAML(const Value& output, std::ostream& out) {
+  if (output.type() == Value::SCOPE) {
+    RenderScopeToYAML(output, out, /*indent=*/0, false);
+    return;
+  }
+  if (output.type() == Value::LIST) {
+    RenderListToYAML(output, out, /*indent=*/0, false);
+    return;
+  }
+  ToStringQuoted(output, out);
+}
+
 void DoConvertValueToOutput(const Value& output,
                             const std::string& output_conversion,
                             const Value& original_output_conversion,
@@ -145,6 +201,8 @@ void DoConvertValueToOutput(const Value& output,
     OutputValue(output, out);
   } else if (output_conversion == "json") {
     OutputJSON(output, out);
+  } else if (output_conversion == "yaml") {
+    OutputYAML(output, out);
   } else if (output_conversion == "scope") {
     if (output.type() != Value::SCOPE) {
       *err = Err(original_output_conversion, "Not a valid scope.");

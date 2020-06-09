@@ -215,6 +215,68 @@ TEST_F(OutputConversionTest, JSON) {
   EXPECT_EQ(result.str(), expected);
 }
 
+TEST_F(OutputConversionTest, YAML) {
+  Err err;
+  auto new_scope = std::make_unique<Scope>(settings());
+  // Add some values to the scope.
+  Value a_value(nullptr, "foo");
+  new_scope->SetValue("a", a_value, nullptr);
+  Value b_value(nullptr, int64_t(6));
+  new_scope->SetValue("b", b_value, nullptr);
+
+  auto c_scope = std::make_unique<Scope>(settings());
+  Value e_value(nullptr, Value::LIST);
+
+  e_value.list_value().push_back(Value(nullptr, "bar"));
+
+  auto e_value_scope = std::make_unique<Scope>(settings());
+  Value f_value(nullptr, "baz");
+  Value d_value(nullptr, "bad");
+  e_value_scope->SetValue("f", f_value, nullptr);
+  e_value_scope->SetValue("d", d_value, nullptr);
+
+  e_value.list_value().push_back(Value(nullptr, std::move(e_value_scope)));
+
+  Value z_value(nullptr, Value::LIST);
+  z_value.list_value().push_back(Value(nullptr, "bax1"));
+  z_value.list_value().push_back(Value(nullptr, "bax2"));
+  z_value.list_value().push_back(Value(nullptr, "bax3"));
+
+  e_value.list_value().push_back(std::move(z_value));
+
+  Value z1_value(nullptr, Value::LIST);
+  z1_value.list_value().push_back(Value(nullptr, "bax9"));
+  z1_value.list_value().push_back(Value(nullptr, "bax8"));
+  z1_value.list_value().push_back(Value(nullptr, "bax7"));
+
+  e_value.list_value().push_back(std::move(z1_value));
+
+  c_scope->SetValue("e", e_value, nullptr);
+
+  new_scope->SetValue("c", Value(nullptr, std::move(c_scope)), nullptr);
+
+  std::string expected(R"*(a: "foo"
+b: 6
+c:
+  e:
+    - "bar"
+    - d: "bad"
+      f: "baz"
+    - - "bax1"
+      - "bax2"
+      - "bax3"
+    - - "bax9"
+      - "bax8"
+      - "bax7"
+)*");
+
+  std::ostringstream result;
+  ConvertValueToOutput(settings(), Value(nullptr, std::move(new_scope)),
+                       Value(nullptr, "yaml"), result, &err);
+  EXPECT_FALSE(err.has_error());
+  EXPECT_EQ(result.str(), expected);
+}
+
 TEST_F(OutputConversionTest, ValueEmpty) {
   Err err;
   std::ostringstream result;
