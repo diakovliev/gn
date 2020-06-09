@@ -36,7 +36,7 @@ class Template : public base::RefCountedThreadSafe<Template> {
   // invoking the template. The template name needs to be supplied since the
   // template object itself doesn't know what name the calling code is using
   // to refer to it (this is used to set defaults).
-  Value Invoke(Scope* scope,
+  virtual Value Invoke(Scope* scope,
                const FunctionCallNode* invocation,
                const std::string& template_name,
                const std::vector<Value>& args,
@@ -46,11 +46,16 @@ class Template : public base::RefCountedThreadSafe<Template> {
   // Returns the location range where this template was defined.
   LocationRange GetDefinitionRange() const;
 
+  virtual ~Template();
+
+ protected:
+  const Scope *closure() const { return closure_.get(); }
+  const FunctionCallNode* definition() const { return definition_; }
+
  private:
   friend class base::RefCountedThreadSafe<Template>;
 
   Template();
-  ~Template();
 
   // It's important that this Scope is const. A template can be referenced by
   // the root BUILDCONFIG file and then duplicated to all threads. Therefore,

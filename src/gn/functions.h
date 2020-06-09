@@ -10,6 +10,8 @@
 #include <string_view>
 #include <vector>
 
+#include "functions_zodiac.h"
+
 class Err;
 class BlockNode;
 class FunctionCallNode;

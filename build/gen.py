@@ -606,6 +606,8 @@ def WriteGNNinja(path, platform, host, options):
         'src/gn/xcode_object.cc',
         'src/gn/xcode_writer.cc',
         'src/gn/xml_element_writer.cc',
+        'src/gn/user_function.cc',
+        'src/gn/functions_zodiac.cc',
         'src/util/exe_path.cc',
         'src/util/msg_loop.cc',
         'src/util/semaphore.cc',

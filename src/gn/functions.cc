@@ -1457,6 +1457,7 @@ struct FunctionInfoInitializer {
     INSERT_FUNCTION(Toolchain, false)
     INSERT_FUNCTION(WriteFile, false)
 
+    INSERT_FUNCTION(UserFunction, false)
 #undef INSERT_FUNCTION
   }
 };
@@ -1496,7 +1497,8 @@ Value RunFunction(Scope* scope,
     // Self evaluating args functions are special weird built-ins like foreach.
     // Rather than force them all to check that they have a block or no block
     // and risk bugs for new additions, check a whitelist here.
-    if (found_function->second.self_evaluating_args_runner != &RunForEach) {
+    if (found_function->second.self_evaluating_args_runner != &RunForEach &&
+        found_function->second.self_evaluating_args_runner != &RunUserFunction) {
       if (!VerifyNoBlockForFunctionCall(function, block, err))
         return Value();
     }
