@@ -1,5 +1,5 @@
 rule cxx
-  command = $cxx -MMD -MF $out.d $includes $cflags -c $in -o $out
+  command = ccache $cxx -MMD -MF $out.d $includes $cflags -c $in -o $out
   description = CXX $out
   depfile = $out.d
   deps = gcc
