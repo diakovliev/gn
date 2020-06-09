@@ -7,6 +7,8 @@
 
 #include <memory>
 #include <string_view>
+#include <thread>
+#include <mutex>
 
 #include "base/logging.h"
 #include "gn/item.h"
@@ -113,6 +115,11 @@ class Toolchain : public Item {
     return tools_;
   }
 
+  bool IsPhonyTargetNeeded(const std::string& data_dep) const {
+    std::lock_guard<std::mutex> lock(phonys_mutex_);
+    return phonys_.insert(data_dep).second;
+  }
+
  private:
   std::map<const char*, std::unique_ptr<Tool>> tools_;
 
@@ -124,6 +131,11 @@ class Toolchain : public Item {
   LabelTargetVector deps_;
   Scope::KeyValueMap args_;
   bool propagates_configs_ = false;
+
+  // Phonys data deps collection
+  mutable std::mutex phonys_mutex_;
+  mutable std::set<std::string> phonys_;
+
 };
 
 #endif  // TOOLS_GN_TOOLCHAIN_H_

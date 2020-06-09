@@ -194,6 +194,9 @@ std::vector<OutputFile> NinjaTargetWriter::WriteInputDepsStampAndGetDep(
   std::vector<const SourceFile*> input_deps_sources;
   input_deps_sources.reserve(32);
 
+  std::vector<const SourceFile*> data_deps_sources;
+  data_deps_sources.reserve(32);
+
   // Actions get implicit dependencies on the script itself.
   if (target_->output_type() == Target::ACTION ||
       target_->output_type() == Target::ACTION_FOREACH)
@@ -216,6 +219,16 @@ std::vector<OutputFile> NinjaTargetWriter::WriteInputDepsStampAndGetDep(
     for (const auto& source : target_->sources())
       input_deps_sources.push_back(&source);
   }
+
+  // Zodiac change. We want to be able to set arbitrary file as
+  // 'data' dependency for any target.
+  std::vector<SourceFile> data_sources;
+  for (std::string data : target_->data())
+    if (!EndsWithSlash(data))
+      data_sources.push_back(SourceFile(data));
+
+  for (const auto& source : data_sources)
+    data_deps_sources.push_back(&source);
 
   // ----------
   // Collect all target input dependencies of this target as was done for the
@@ -252,18 +265,20 @@ std::vector<OutputFile> NinjaTargetWriter::WriteInputDepsStampAndGetDep(
   // ---------
   // Write the outputs.
 
-  if (input_deps_sources.size() + input_deps_targets.size() == 0)
+  if (input_deps_sources.size() + data_deps_sources.size() + input_deps_targets.size() == 0)
     return std::vector<OutputFile>();  // No input dependencies.
 
   // If we're only generating one input dependency, return it directly instead
   // of writing a stamp file for it.
-  if (input_deps_sources.size() == 1 && input_deps_targets.size() == 0)
-    return std::vector<OutputFile>{
-        OutputFile(settings_->build_settings(), *input_deps_sources[0])};
-  if (input_deps_sources.size() == 0 && input_deps_targets.size() == 1) {
-    const OutputFile& dep = input_deps_targets[0]->dependency_output_file();
-    DCHECK(!dep.value().empty());
-    return std::vector<OutputFile>{dep};
+  if (data_deps_sources.size() == 0) {
+    if (input_deps_sources.size() == 1 && input_deps_targets.size() == 0)
+      return std::vector<OutputFile>{
+          OutputFile(settings_->build_settings(), *input_deps_sources[0])};
+    if (input_deps_sources.size() == 0 && input_deps_targets.size() == 1) {
+      const OutputFile& dep = input_deps_targets[0]->dependency_output_file();
+      DCHECK(!dep.value().empty());
+      return std::vector<OutputFile>{dep};
+    }
   }
 
   std::vector<OutputFile> outs;
@@ -286,6 +301,18 @@ std::vector<OutputFile> NinjaTargetWriter::WriteInputDepsStampAndGetDep(
   if (num_stamp_uses == 1u)
     return outs;
 
+  // Phony target for data deps.
+  if (data_deps_sources.size() > 0) {
+    for (const SourceFile* source : data_deps_sources) {
+      OutputFile dep(settings_->build_settings(), *source);
+      if (target_->toolchain()->IsPhonyTargetNeeded(dep.value())) {
+        out_ << "build ";
+        path_output_.WriteFile(out_, dep);
+        out_ << ": phony\n";
+      }
+    }
+  }
+
   // Make a stamp file.
   OutputFile input_stamp_file =
       GetBuildDirForTargetAsOutputFile(target_, BuildDirType::OBJ);
@@ -297,6 +324,14 @@ std::vector<OutputFile> NinjaTargetWriter::WriteInputDepsStampAndGetDep(
   out_ << ": " << GetNinjaRulePrefixForToolchain(settings_)
        << GeneralTool::kGeneralToolStamp;
   path_output_.WriteFiles(out_, outs);
+
+  // Data deps.
+  if (data_deps_sources.size() > 0) {
+    for (const SourceFile* source : data_deps_sources) {
+      out_ << " ";
+      path_output_.WriteFile(out_, *source);
+    }
+  }
 
   out_ << "\n";
   return std::vector<OutputFile>{input_stamp_file};
