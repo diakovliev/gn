@@ -540,6 +540,7 @@ def WriteGNNinja(path, platform, host, options):
         'src/gn/loader.cc',
         'src/gn/location.cc',
         'src/gn/metadata.cc',
+        'src/gn/dyndeps.cc',
         'src/gn/metadata_walk.cc',
         'src/gn/ninja_action_target_writer.cc',
         'src/gn/ninja_binary_target_writer.cc',

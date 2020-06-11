@@ -27,6 +27,7 @@
 #include "gn/source_file.h"
 #include "gn/toolchain.h"
 #include "gn/unique_vector.h"
+#include "gn/dyndeps.h"
 
 class DepsIteratorRange;
 class Settings;
@@ -157,6 +158,10 @@ class Target : public Item {
   // Metadata. Target takes ownership of the resulting scope.
   const Metadata& metadata() const { return metadata_; }
   Metadata& metadata() { return metadata_; }
+
+  // Dyndeps. Target takes ownership of the resulting scope.
+  const Dyndeps& dyndeps() const { return dyndeps_; }
+  Dyndeps& dyndeps() { return dyndeps_; }
 
   // Get metadata from this target and its dependencies. This is intended to
   // be called after the target is resolved.
@@ -493,6 +498,9 @@ class Target : public Item {
   SourceDir rebase_;
   std::vector<std::string> data_keys_;
   std::vector<std::string> walk_keys_;
+
+  // Dyndeps
+  Dyndeps dyndeps_;
 
   DISALLOW_COPY_AND_ASSIGN(Target);
 };

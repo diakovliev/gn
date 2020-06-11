@@ -17,6 +17,9 @@ GroupTargetGenerator::GroupTargetGenerator(
 GroupTargetGenerator::~GroupTargetGenerator() = default;
 
 void GroupTargetGenerator::DoRun() {
+  if (!FillDyndeps())
+    return;
+
   target_->set_output_type(Target::GROUP);
   // Groups only have the default types filled in by the target generator
   // base class.

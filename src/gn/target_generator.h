@@ -53,6 +53,7 @@ class TargetGenerator {
   bool FillOutputs(bool allow_substitutions);
   bool FillCheckIncludes();
   bool FillOutputExtension();
+  bool FillDyndeps();
 
   // Rrturns true if the given pattern will expand to a file in the output
   // directory. If not, returns false and sets the error, blaming the given
@@ -78,7 +79,10 @@ class TargetGenerator {
   // the target to save them.
   bool FillGenericConfigs(const char* var_name,
                           UniqueVector<LabelConfigPair>* dest);
-  bool FillGenericDeps(const char* var_name, LabelTargetVector* dest);
+  bool FillGenericDeps(const char* var_name, LabelTargetVector* dest,
+                       Scope* scope = nullptr);
+
+  bool FillStringList(std::vector<std::string>& dest, Value *input);
 
   DISALLOW_COPY_AND_ASSIGN(TargetGenerator);
 };

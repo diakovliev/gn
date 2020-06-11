@@ -1475,6 +1475,26 @@ Example
   }
 )";
 
+const char kDyndeps[] = "dyndeps";
+const char kDyndeps_HelpShort[] = "dyndeps: [scope] Dynamic dependencies selector setup of this target.";
+const char kDyndeps_Help[] =
+    R"(dyndeps:  Dynamic dependencies selector setup of this target.
+
+  TODO: Write description.
+
+Example
+
+  group("dep1") {}
+  group("dep2") {}
+  group("select_my_dep") {
+    dyndep = {
+      script = "//gn/random_dep_selector.py"
+      args = [ "--selector", "arguments" ]
+      deps = [ "dep1", "dep2" ]
+    }
+  }
+)";
+
 const char kOutputExtension[] = "output_extension";
 const char kOutputExtension_HelpShort[] =
     "output_extension: [string] Value to use for the output's file extension.";
@@ -2320,6 +2340,7 @@ const VariableInfoMap& GetTargetVariables() {
     INSERT_VARIABLE(Libs)
     INSERT_VARIABLE(LibDirs)
     INSERT_VARIABLE(Metadata)
+    INSERT_VARIABLE(Dyndeps)
     INSERT_VARIABLE(OutputDir)
     INSERT_VARIABLE(OutputExtension)
     INSERT_VARIABLE(OutputName)

@@ -238,6 +238,7 @@ bool Builder::TargetDefined(BuilderRecord* record, Err* err) {
       !AddDeps(record, target->configs().vector(), err) ||
       !AddDeps(record, target->all_dependent_configs(), err) ||
       !AddDeps(record, target->public_configs(), err) ||
+      !AddDeps(record, target->dyndeps().deps(), err) ||
       !AddActionValuesDep(record, target->action_values(), err) ||
       !AddToolchainDep(record, target, err))
     return false;
@@ -465,6 +466,7 @@ bool Builder::ResolveItem(BuilderRecord* record, Err* err) {
     if (!ResolveDeps(&target->public_deps(), err) ||
         !ResolveDeps(&target->private_deps(), err) ||
         !ResolveDeps(&target->data_deps(), err) ||
+        !ResolveDeps(&target->dyndeps().deps(), err) ||
         !ResolveConfigs(&target->configs(), err) ||
         !ResolveConfigs(&target->all_dependent_configs(), err) ||
         !ResolveConfigs(&target->public_configs(), err) ||
@@ -514,6 +516,9 @@ bool Builder::ResolveDeps(LabelTargetVector* deps, Err* err) {
     if (!record)
       return false;
     cur.ptr = record->item()->AsTarget();
+
+    if (cur.ptr->dependency_output_file().value().empty())
+        return false;
   }
   return true;
 }

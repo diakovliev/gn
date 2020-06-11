@@ -301,6 +301,78 @@ bool TargetGenerator::FillMetadata() {
   return true;
 }
 
+bool TargetGenerator::FillStringList(std::vector<std::string>& result, Value *input) {
+  std::vector<Value>& input_list = input->list_value();
+  result.reserve(input_list.size());
+
+  for (size_t i = 0; i < input_list.size(); i++) {
+    const Value& input = input_list[i];
+    if (!input.VerifyTypeIs(Value::STRING, err_))
+      return false;
+
+    result.push_back(input.string_value());
+  }
+
+  return true;
+}
+
+bool TargetGenerator::FillDyndeps() {
+  // Need to get a mutable value to mark all values in the scope as used. This
+  // cannot be done on a const Scope.
+  Value* value = scope_->GetMutableValue(variables::kDyndeps,
+                                         Scope::SEARCH_CURRENT, true);
+
+  if (!value)
+    return true;
+
+  if (!value->VerifyTypeIs(Value::SCOPE, err_))
+    return false;
+
+  Scope* scope_value = value->scope_value();
+
+  Value* script = scope_value->GetMutableValue(variables::kScript, Scope::SEARCH_CURRENT, false);
+  if (!script || !script->VerifyTypeIs(Value::STRING, err_) || script->string_value().empty()) {
+    *err_ =
+      Err(*value, "The 'dyndeps' 'script' shall be non empty string.");
+    return false;
+  }
+
+  Value* args = scope_value->GetMutableValue(variables::kArgs, Scope::SEARCH_CURRENT, false);
+  if (args) {
+    if (!args->VerifyTypeIs(Value::LIST, err_)) {
+      *err_ =
+        Err(*value, "The 'dyndeps' 'args' shall be a string list.");
+      return false;
+    }
+
+    if (!FillStringList(target_->dyndeps().args(), args))
+      return false;
+  }
+
+
+  target_->dyndeps().set_script(script->string_value());
+
+  if (target_->dyndeps().script().empty()) {
+      *err_ =
+          Err(*value, "The 'dyndeps' 'script' shall be non empty string.");
+      return false;
+  }
+
+  if (!FillGenericDeps(variables::kDeps, &target_->dyndeps().deps(), scope_value))
+    return false;
+
+  scope_value->MarkUsed(variables::kScript);
+  scope_value->MarkUsed(variables::kDeps);
+  scope_value->MarkUsed(variables::kArgs);
+
+  scope_->MarkUsed(variables::kDyndeps);
+
+  target_->dyndeps().set_source_dir(scope_->GetSourceDir());
+  target_->dyndeps().set_origin(value->origin());
+
+  return true;
+}
+
 bool TargetGenerator::FillTestonly() {
   const Value* value = scope_->GetValue(variables::kTestonly, true);
   if (value) {
@@ -421,8 +493,13 @@ bool TargetGenerator::FillGenericConfigs(const char* var_name,
 }
 
 bool TargetGenerator::FillGenericDeps(const char* var_name,
-                                      LabelTargetVector* dest) {
-  const Value* value = scope_->GetValue(var_name, true);
+                          LabelTargetVector* dest, Scope* scope) {
+  Scope *source_scope = scope_;
+
+  if (scope)
+    source_scope = scope;
+
+  const Value* value = source_scope->GetValue(var_name, true);
   if (value) {
     ExtractListOfLabels(scope_->settings()->build_settings(), *value,
                         scope_->GetSourceDir(), ToolchainLabelForScope(scope_),

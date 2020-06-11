@@ -349,6 +349,63 @@ void NinjaTargetWriter::WriteStampForTarget(
       << "Output should end in \".stamp\" for stamp file output. Instead got: "
       << "\"" << stamp_file.value() << "\"";
 
+  // Dyndeps
+  OutputFile dd = GetBuildDirForTargetAsOutputFile(target_, BuildDirType::GEN);
+  dd.value().append(target_->label().name());
+  dd.value().append(".dd.gen");
+
+  if (!target_->dyndeps().empty()) {
+    // Make a unique name for this rule.
+    //
+    // Use a unique name for the response file when there are multiple build
+    // steps so that they don't stomp on each other. When there are no sources,
+    // there will be only one invocation so we can use a simple name.
+    std::string full_target_name = target_->label().GetUserVisibleName(true);
+    std::string rule_name(full_target_name);
+    base::ReplaceChars(rule_name, ":/()", "_", &rule_name);
+    rule_name.append("_dd_gen_rule");
+
+    // Short target name for passing to script
+    std::string target_name = target_->label().GetUserVisibleName(false);
+
+    SourceFile script_source(target_->dyndeps().script());
+
+    // Rule
+    out_ << "rule " << rule_name << std::endl;
+    out_ << "  description = DYNDEPS " << full_target_name << std::endl;
+    out_ << "  command = "
+         << settings_->build_settings()->python_path().value() << " ";
+    path_output_.WriteFile(out_, script_source);
+    for (auto& arg: target_->dyndeps().args()) {
+        out_ << " " << arg;
+    }
+    out_ << " --dd_target " << target_name;
+    out_ << " --dd_stamp $target";
+    out_ << " --dd_file $out";
+    for (size_t i = 0; i < target_->dyndeps().deps().size(); ++i) {
+        out_ << " --dd_dep $dep" << i;
+    }
+    out_ << std::endl;
+
+    // Target
+    out_ << "build ";
+    path_output_.WriteFile(out_, dd);
+    out_ << " : " << rule_name << std::endl;
+    out_ << " target = ";
+    path_output_.WriteFile(out_, stamp_file);
+    out_ << std::endl;
+    for (size_t i = 0; i < target_->dyndeps().deps().size(); ++i) {
+        const auto& pair = target_->dyndeps().deps()[i];
+        out_ << " dep" << i << " = ";
+        out_ << "'" << pair.label.GetUserVisibleName(false) << ";";
+        DCHECK(!pair.ptr->dependency_output_file().value().empty());
+        path_output_.WriteFile(out_, pair.ptr->dependency_output_file());
+        out_ << "'" << std::endl;
+    }
+    out_ << std::endl;
+
+  }
+
   out_ << "build ";
   path_output_.WriteFile(out_, stamp_file);
 
@@ -356,9 +413,20 @@ void NinjaTargetWriter::WriteStampForTarget(
        << GeneralTool::kGeneralToolStamp;
   path_output_.WriteFiles(out_, files);
 
+  if (!target_->dyndeps().empty()) {
+    out_ << " | ";
+    path_output_.WriteFile(out_, dd);
+  }
+
   if (!order_only_deps.empty()) {
-    out_ << " ||";
+    out_ << " || ";
     path_output_.WriteFiles(out_, order_only_deps);
   }
+
+  if (!target_->dyndeps().empty()) {
+    out_ << std::endl << "  dyndep = ";
+    path_output_.WriteFile(out_, dd);
+  }
+
   out_ << std::endl;
 }
