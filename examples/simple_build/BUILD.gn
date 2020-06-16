@@ -9,6 +9,10 @@ executable("hello") {
     ":hello_shared",
     ":hello_static",
   ]
+
+  data = [
+    "README.md"
+  ]
 }
 
 shared_library("hello_shared") {
@@ -20,9 +24,18 @@ shared_library("hello_shared") {
   defines = [ "HELLO_SHARED_IMPLEMENTATION" ]
 }
 
+group("test") {
+  data = [
+    "README.md"
+  ]
+}
+
 static_library("hello_static") {
   sources = [
     "hello_static.cc",
     "hello_static.h",
+  ]
+  deps = [
+    ":test"
   ]
 }
