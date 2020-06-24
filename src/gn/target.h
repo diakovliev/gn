@@ -28,6 +28,7 @@
 #include "gn/toolchain.h"
 #include "gn/unique_vector.h"
 #include "gn/dyndeps.h"
+#include "gn/filesystem_utils.h"
 
 class DepsIteratorRange;
 class Settings;
@@ -276,6 +277,9 @@ class Target : public Item {
   ActionValues& action_values() { return action_values_; }
   const ActionValues& action_values() const { return action_values_; }
 
+  bool build_flags_args() const { return build_flags_args_; }
+  void set_build_flags_args(bool value) { build_flags_args_ = value; }
+
   RustValues& rust_values() { return rust_values_; }
   const RustValues& rust_values() const { return rust_values_; }
 
@@ -391,6 +395,8 @@ class Target : public Item {
                                const char** computed_tool_type,
                                std::vector<OutputFile>* outputs) const;
 
+  std::vector<std::string> PopulateBuildFlagsArgs() const;
+
  private:
   FRIEND_TEST_ALL_PREFIXES(TargetTest, ResolvePrecompiledHeaders);
 
@@ -475,6 +481,7 @@ class Target : public Item {
 
   // Used for action[_foreach] targets.
   ActionValues action_values_;
+  bool build_flags_args_ = false;
 
   // Used for Rust targets.
   RustValues rust_values_;

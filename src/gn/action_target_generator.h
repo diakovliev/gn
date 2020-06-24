@@ -25,6 +25,7 @@ class ActionTargetGenerator : public TargetGenerator {
  private:
   bool FillScript();
   bool FillScriptArgs();
+  bool FillScriptBuildFlagsArgs();
   bool FillResponseFileContents();
   bool FillDescription();
   bool FillDepfile();

@@ -540,6 +540,15 @@ const char kArgs_Help[] =
   See also "gn help action" and "gn help action_foreach".
 )";
 
+const char kBuildFlagsArgs[] = "build_flags_args";
+const char kBuildFlagsArgs_HelpShort[] =
+    "build_flags_args: [boolean] Pass to action script build flags pupulated from dependencies.";
+const char kBuildFlagsArgs_Help[] =
+    R"(build_flags_args: (target variable) Pass to action script build flags pupulated from dependencies.
+
+  TODO: Write description.
+)";
+
 const char kAssertNoDeps[] = "assert_no_deps";
 const char kAssertNoDeps_HelpShort[] =
     "assert_no_deps: [label pattern list] Ensure no deps on these targets.";
@@ -2303,6 +2312,7 @@ const VariableInfoMap& GetTargetVariables() {
     INSERT_VARIABLE(AllowCircularIncludesFrom)
     INSERT_VARIABLE(Arflags)
     INSERT_VARIABLE(Args)
+    INSERT_VARIABLE(BuildFlagsArgs)
     INSERT_VARIABLE(Asmflags)
     INSERT_VARIABLE(AssertNoDeps)
     INSERT_VARIABLE(BundleRootDir)

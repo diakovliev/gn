@@ -98,6 +98,10 @@ extern const char kArgs[];
 extern const char kArgs_HelpShort[];
 extern const char kArgs_Help[];
 
+extern const char kBuildFlagsArgs[];
+extern const char kBuildFlagsArgs_HelpShort[];
+extern const char kBuildFlagsArgs_Help[];
+
 extern const char kAsmflags[];
 extern const char kAsmflags_HelpShort[];
 extern const char* kAsmflags_Help;

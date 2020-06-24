@@ -48,6 +48,9 @@ void ActionTargetGenerator::DoRun() {
   if (!FillScriptArgs())
     return;
 
+  if (!FillScriptBuildFlagsArgs())
+    return;
+
   if (!FillResponseFileContents())
     return;
 
@@ -126,6 +129,19 @@ bool ActionTargetGenerator::FillScriptArgs() {
           target_->action_values().args().required_types(),
           &IsValidScriptArgsSubstitution, value->origin(), err_))
     return false;
+
+  return true;
+}
+
+bool ActionTargetGenerator::FillScriptBuildFlagsArgs() {
+  const Value* value = scope_->GetValue(variables::kBuildFlagsArgs, true);
+  if (!value)
+    return true;  // Nothing to do.
+
+  if (!value->VerifyTypeIs(Value::BOOLEAN, err_))
+    return false;
+
+  target_->set_build_flags_args(value->boolean_value());
 
   return true;
 }

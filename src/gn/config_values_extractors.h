@@ -15,6 +15,12 @@
 #include "gn/config_values.h"
 #include "gn/target.h"
 
+#include "gn/settings.h"
+#include "gn/build_settings.h"
+#include "gn/source_dir.h"
+#include "gn/lib_file.h"
+#include "gn/escape.h"
+
 struct EscapeOptions;
 
 // Provides a way to iterate through all ConfigValues applying to a given
@@ -90,6 +96,56 @@ inline void RecursiveTargetConfigToStream(
     std::ostream& out) {
   for (ConfigValuesIterator iter(target); !iter.done(); iter.Next())
     ConfigValuesToStream(iter.cur(), getter, writer, out);
+}
+
+template<typename T>
+inline std::string BuildFlagsArgsToString(const T& v, const Settings* settings) {
+  return v;
+}
+
+template<>
+inline std::string BuildFlagsArgsToString<SourceDir>(const SourceDir& v, const Settings* settings) {
+  return settings->build_settings()->GetFullPath(v).value();
+}
+
+template<>
+inline std::string BuildFlagsArgsToString<LibFile>(const LibFile& v, const Settings* settings) {
+  return v.value();
+}
+
+template <typename T>
+inline void ConfigValuesToBuildFlagsArgsVector(const ConfigValues& values,
+                                 const std::vector<T>& (ConfigValues::*getter)()
+                                     const,
+                                 std::vector<std::string>& out,
+                                 const std::string& arg_name,
+                                 const Settings* settings) {
+  EscapeOptions eopts;
+  eopts.mode = ESCAPE_NINJA_COMMAND;
+  const std::vector<T>& v = (values.*getter)();
+  out.reserve(out.size() + v.size());
+  std::for_each(v.begin(), v.end(), [&](const auto& it) {
+    std::string value;
+    value.append(arg_name);
+    value.append("=\"");
+    value.append(EscapeString(BuildFlagsArgsToString(it, settings), eopts, nullptr));
+    value.append("\"");
+    out.push_back(value);
+  });
+}
+
+// Writes a given config value that applies to a given target. This collects
+// all values from the target itself and all configs that apply, and adds
+// then in order.
+template <typename T>
+inline void RecursiveTargetConfigToBuildFlagsArgsVector(
+    const Target* target,
+    const std::vector<T>& (ConfigValues::*getter)() const,
+    std::vector<std::string>& out,
+    const std::string& arg_name,
+    const Settings* settings) {
+  for (ConfigValuesIterator iter(target); !iter.done(); iter.Next())
+    ConfigValuesToBuildFlagsArgsVector(iter.cur(), getter, out, arg_name, settings);
 }
 
 // Writes the values out as strings with no transformation.

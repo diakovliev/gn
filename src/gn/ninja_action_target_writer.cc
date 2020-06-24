@@ -141,6 +141,9 @@ std::string NinjaActionTargetWriter::WriteRuleDefinition() {
     out_ << " ";
     SubstitutionWriter::WriteWithNinjaVariables(arg, args_escape_options, out_);
   }
+  for (const auto& build_flags_arg: target_->PopulateBuildFlagsArgs()) {
+    out_ << " " << build_flags_arg;
+  }
   out_ << std::endl;
 
   if (target_->action_values().has_description()) {

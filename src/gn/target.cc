@@ -5,8 +5,10 @@
 #include "gn/target.h"
 
 #include <stddef.h>
+#include <fstream>
 
 #include "base/stl_util.h"
+#include "base/files/file_util.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "gn/c_tool.h"
@@ -19,6 +21,7 @@
 #include "gn/tool.h"
 #include "gn/toolchain.h"
 #include "gn/trace.h"
+#include "gn/compile_commands_writer.h"
 
 namespace {
 
@@ -1134,4 +1137,34 @@ bool Target::GetMetadata(const std::vector<std::string>& keys_to_extract,
   result->insert(result->end(), std::make_move_iterator(current_result.begin()),
                  std::make_move_iterator(current_result.end()));
   return true;
+}
+
+// Helper template function to call RecursiveTargetConfigToBuildFlagsArgsVector
+template <typename T>
+void FlagsGetter(const Target* target,
+                        const std::vector<T>& (ConfigValues::*getter)() const,
+                        std::vector<std::string>& out,
+                        const std::string arg_name,
+                        const Settings* settings) {
+  RecursiveTargetConfigToBuildFlagsArgsVector<T>(target, getter, out, arg_name, settings);
+};
+
+std::vector<std::string> Target::PopulateBuildFlagsArgs() const {
+  std::vector<std::string> result;
+  if (!build_flags_args_)
+    return result;
+
+  FlagsGetter<std::string> ( this,  &ConfigValues::arflags,       result, "--gn_arflags",       settings() );
+  FlagsGetter<std::string> ( this,  &ConfigValues::asmflags,      result, "--gn_asmflags",      settings() );
+  FlagsGetter<std::string> ( this,  &ConfigValues::cflags,        result, "--gn_cflags",        settings() );
+  FlagsGetter<std::string> ( this,  &ConfigValues::cflags_c,      result, "--gn_cflags_c",      settings() );
+  FlagsGetter<std::string> ( this,  &ConfigValues::cflags_cc,     result, "--gn_cflags_cc",     settings() );
+  FlagsGetter<std::string> ( this,  &ConfigValues::defines,       result, "--gn_defines",       settings() );
+  FlagsGetter<SourceDir>   ( this,  &ConfigValues::include_dirs,  result, "--gn_include_dirs",  settings() );
+
+  FlagsGetter<std::string> ( this,  &ConfigValues::ldflags,       result, "--gn_ldflags",       settings() );
+  FlagsGetter<LibFile>     ( this,  &ConfigValues::libs,          result, "--gn_libs",          settings() );
+  FlagsGetter<SourceDir>   ( this,  &ConfigValues::lib_dirs,      result, "--gn_lib_dirs",      settings() );
+
+  return result;
 }
