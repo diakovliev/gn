@@ -542,11 +542,27 @@ const char kArgs_Help[] =
 
 const char kBuildFlagsArgs[] = "build_flags_args";
 const char kBuildFlagsArgs_HelpShort[] =
-    "build_flags_args: [boolean] Pass to action script build flags pupulated from dependencies.";
+    "build_flags_args: [boolean] Pass to action script build flags populated from dependencies.";
 const char kBuildFlagsArgs_Help[] =
-    R"(build_flags_args: (target variable) Pass to action script build flags pupulated from dependencies.
+    R"(build_flags_args: (target variable) Pass to action script build flags populated from dependencies.
 
-  TODO: Write description.
+  Zodiac extension!
+
+  The action.build_flags_args=true flag will enable passing 'effective' build
+  flags populated by gn for the target to action.script, using set of predefined
+  command line arguments.
+
+  Predefined arguments set:
+    --gn_arflags
+    --gn_asmflags
+    --gn_cflags
+    --gn_cflags_c
+    --gn_cflags_cc
+    --gn_defines
+    --gn_ldflags
+    --gn_include_dirs
+    --gn_lib_dirs
+    --gn_libs
 )";
 
 const char kAssertNoDeps[] = "assert_no_deps";
@@ -1487,21 +1503,164 @@ Example
 const char kDyndeps[] = "dyndeps";
 const char kDyndeps_HelpShort[] = "dyndeps: [scope] Dynamic dependencies selector setup of this target.";
 const char kDyndeps_Help[] =
-    R"(dyndeps:  Dynamic dependencies selector setup of this target.
+    R"(dyndeps: Dynamic dependencies selector setup of this target.
 
-  TODO: Write description.
+  Zodiac extension!
 
-Example
+  The 'dynamic dependencies' feature was introduced in ninja-build v 1.10.0.
+  It will allow to select target dependencies on build time using external
+  script what have to generate 'dynamic dependencies' file.
 
+  The 'dynamic dependencies' file format described in ninja-build documentation.
+
+  Script calling conventions:
+    - dyndep.args collection will be passed to dyndep.script as cli arguments.
+    - Data needed for the 'dynamic dependencies' file generator will be passed
+    to dyndep.script using following set of predefined cli arguments:
+      --dd_target (string)              : Processed target name.
+      --dd_stamp  (string)              : Processed target stamp file.
+      --dd_file   (string)              : Expected location for the
+        'dynamic dependencies' file.
+      --dd_dep    (vector of strings)   : dyndep.dep Dependencies specification
+        in format: <dep_name>;<dep_stamp_file>.
+
+  Limitations:
+    - The 'dynamic dependencies' feature supported only for 'group' targets.
+
+  Example:
+
+  BUILD.gn:
+
+  # Let's define 2 targets
   group("dep1") {}
-  group("dep2") {}
-  group("select_my_dep") {
-    dyndep = {
-      script = "//gn/random_dep_selector.py"
-      args = [ "--selector", "arguments" ]
-      deps = [ "dep1", "dep2" ]
+  group("dep1") {}
+
+  # Third target
+  group("target") {
+
+    # Dynamic dependencies setup
+    dyndeps = {
+
+      # Script what will be used to generate dd file
+      script = "//gn/dd_test.py"
+
+      # Optional additional script arguments
+      args = [ "--some", "script", "args" ]
+
+      # Define dependencies list what will ne passed to script
+      deps = [ ":dep1", ":dep2" ]
     }
   }
+
+  gn/ninja_dyndep.py:
+
+    class Dep:
+        SEPA = ';'
+        SEPA2 = ':'
+
+        def __init__(self, spec):
+            self.__name, self.__stamp = spec.split(self.SEPA, 1)
+
+        def stamp(self):
+            return self.__stamp;
+
+        def name(self):
+            return self.__name;
+
+        def short_name(self):
+            return self.__name.split(self.SEPA2, 1)[1]
+
+        @staticmethod
+        def deps_map(args):
+            result = {}
+            for d in args.dd_dep:
+                d = Dep(d)
+                result[d.name()] = d
+            return result
+
+    class DD:
+        VERSION         = "ninja_dyndep_version = 1\n"
+        LINE_FMT        = "build %s : dyndep | %s\n  restat = %d\n"
+
+        def __init__(self, filename, target_stamp, restat = 1):
+            self.__filename     = filename
+            self.__target_stamp = target_stamp
+            self.__restat       = restat
+            self.__file         = None
+            self.__deps         = []
+
+        def __enter__(self):
+            self.__file = open(self.__filename, 'w')
+            self.__file.write(self.VERSION)
+            return self
+
+        def add_dep(self, dep):
+            self.__deps.append(dep)
+
+        def add_deps(self, deps):
+            self.__deps.extend(deps)
+
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            self.__file.write(self.LINE_FMT % (
+                self.__target_stamp,
+                " ".join([ d.stamp() for d in self.__deps ]),
+                self.__restat,
+            ))
+            self.__file.close()
+
+    def fill_argparser(parser):
+        parser.add_argument(
+                "--dd_target",
+                required=True,
+                action="store",
+                help="Processed target."
+        )
+        parser.add_argument(
+                "--dd_stamp",
+                required=True,
+                action="store",
+                help="Target stamp file."
+        )
+        parser.add_argument(
+                "--dd_file",
+                required=True,
+                action="store",
+                help="Dynamic dependencies file."
+        )
+        parser.add_argument(
+                "--dd_dep",
+                action="append",
+                help="Dependency specification in format <dep_name>;<dep_stamp_file>."
+        )
+        return parser
+
+
+  gn/dd_test.py:
+
+    import argparse
+
+    import ninja_dyndep
+
+    parser = ninja_dyndep.fill_argparser(argparse.ArgumentParser())
+
+    args = parser.parse_args()
+
+    print("dd target        : %s" % args.dd_target)
+    print("dd file          : %s" % args.dd_file)
+    print("dd stamp         : %s" % args.dd_stamp)
+
+    deps = ninja_dyndep.Dep.deps_map(args)
+
+    for d in deps.values():
+        print("dep name         : %s" % d.name())
+        print("    short name   : %s" % d.short_name())
+        print("    stamp        : %s" % d.stamp())
+
+    with ninja_dyndep.DD(args.dd_file, args.dd_stamp) as dd:
+        # Here we can select currently needed dependency.
+        # For example I want to select dependency by index:
+        dd.add_dep(deps.values()[2])
+
 )";
 
 const char kOutputExtension[] = "output_extension";
