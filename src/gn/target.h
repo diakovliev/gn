@@ -25,6 +25,7 @@
 #include "gn/output_file.h"
 #include "gn/rust_values.h"
 #include "gn/source_file.h"
+#include "gn/swift_values.h"
 #include "gn/toolchain.h"
 #include "gn/unique_vector.h"
 #include "gn/dyndeps.h"
@@ -216,7 +217,8 @@ class Target : public Item {
   bool hard_dep() const {
     return output_type_ == ACTION || output_type_ == ACTION_FOREACH ||
            output_type_ == COPY_FILES || output_type_ == CREATE_BUNDLE ||
-           output_type_ == BUNDLE_DATA || output_type_ == GENERATED_FILE;
+           output_type_ == BUNDLE_DATA || output_type_ == GENERATED_FILE ||
+           (IsBinary() && swift_values().builds_module());
   }
 
   // Returns the iterator range which can be used in range-based for loops
@@ -279,6 +281,9 @@ class Target : public Item {
 
   bool build_flags_args() const { return build_flags_args_; }
   void set_build_flags_args(bool value) { build_flags_args_ = value; }
+
+  SwiftValues& swift_values() { return swift_values_; }
+  const SwiftValues& swift_values() const { return swift_values_; }
 
   RustValues& rust_values() { return rust_values_; }
   const RustValues& rust_values() const { return rust_values_; }
@@ -417,6 +422,7 @@ class Target : public Item {
 
   // Validates the given thing when a target is resolved.
   bool CheckVisibility(Err* err) const;
+  bool CheckConfigVisibility(Err* err) const;
   bool CheckTestonly(Err* err) const;
   bool CheckAssertNoDeps(Err* err) const;
   void CheckSourcesGenerated() const;
@@ -485,6 +491,9 @@ class Target : public Item {
 
   // Used for Rust targets.
   RustValues rust_values_;
+
+  // User for Swift targets.
+  SwiftValues swift_values_;
 
   // Toolchain used by this target. Null until target is resolved.
   const Toolchain* toolchain_ = nullptr;

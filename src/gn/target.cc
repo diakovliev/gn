@@ -341,6 +341,11 @@ bool Target::OnResolved(Err* err) {
   ScopedTrace trace(TraceItem::TRACE_ON_RESOLVED, label());
   trace.SetToolchain(settings()->toolchain_label());
 
+  // Check visibility for just this target's own configs, before dependents are
+  // added.
+  if (!CheckConfigVisibility(err))
+    return false;
+
   // Copy this target's own dependent and public configs to the list of configs
   // applying to it.
   configs_.Append(all_dependent_configs_.begin(), all_dependent_configs_.end());
@@ -389,6 +394,9 @@ bool Target::OnResolved(Err* err) {
     return false;
 
   if (!FillOutputFiles(err))
+    return false;
+
+  if (!swift_values_.OnTargetResolved(this, err))
     return false;
 
   if (!CheckSourceSetLanguages(err))
@@ -601,9 +609,19 @@ bool Target::GetOutputFilesForSource(const SourceFile& source,
     if (!tool)
       return false;  // Tool does not apply for this toolchain.file.
 
+    // Swift may generate on a module or source level.
+    if (file_type == SourceFile::SOURCE_SWIFT) {
+      if (tool->partial_outputs().list().empty())
+        return false;
+    }
+
+    const SubstitutionList& substitution_list =
+        file_type == SourceFile::SOURCE_SWIFT ? tool->partial_outputs()
+                                              : tool->outputs();
+
     // Figure out what output(s) this compiler produces.
     SubstitutionWriter::ApplyListToCompilerAsOutputFile(
-        this, source, tool->outputs(), outputs);
+        this, source, substitution_list, outputs);
   }
   return !outputs->empty();
 }
@@ -730,9 +748,12 @@ void Target::PullRecursiveHardDeps() {
 
     // If |pair.ptr| is binary target and |pair.ptr| has no public header,
     // |this| target does not need to have |pair.ptr|'s hard_deps as its
-    // hard_deps to start compiles earlier.
+    // hard_deps to start compiles earlier. Unless the target compiles a
+    // Swift module (since they also generate a header that can be used
+    // by the current target).
     if (pair.ptr->IsBinary() && !pair.ptr->all_headers_public() &&
-        pair.ptr->public_headers().empty()) {
+        pair.ptr->public_headers().empty() &&
+        !pair.ptr->swift_values().builds_module()) {
       continue;
     }
 
@@ -945,6 +966,15 @@ bool Target::CheckVisibility(Err* err) const {
   for (const auto& pair : GetDeps(DEPS_ALL)) {
     if (!Visibility::CheckItemVisibility(this, pair.ptr, err))
       return false;
+  }
+  return true;
+}
+
+bool Target::CheckConfigVisibility(Err* err) const {
+  for (ConfigValuesIterator iter(this); !iter.done(); iter.Next()) {
+    if (const Config* config = iter.GetCurrentConfig())
+      if (!Visibility::CheckItemVisibility(this, config, err))
+        return false;
   }
   return true;
 }
