@@ -401,8 +401,8 @@ void NinjaTargetWriter::WriteStampForTarget(
         const auto& pair = target_->dyndeps().deps()[i];
         out_ << " dep" << i << " = ";
         out_ << "'" << pair.label.GetUserVisibleName(false) << ";";
-        DCHECK(!pair.ptr->dependency_output_file().value().empty());
-        path_output_.WriteFile(out_, pair.ptr->dependency_output_file());
+        DCHECK(pair.ptr->dependency_output_file_or_phony());
+        path_output_.WriteFile(out_, *pair.ptr->dependency_output_file_or_phony());
         out_ << "'" << std::endl;
     }
     out_ << std::endl;

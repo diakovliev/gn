@@ -516,9 +516,6 @@ bool Builder::ResolveDeps(LabelTargetVector* deps, Err* err) {
     if (!record)
       return false;
     cur.ptr = record->item()->AsTarget();
-
-    if (cur.ptr->dependency_output_file().value().empty())
-        return false;
   }
   return true;
 }
