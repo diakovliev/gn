@@ -312,7 +312,7 @@ std::vector<OutputFile> NinjaTargetWriter::WriteInputDepsStampAndGetDep(
     if (target_->toolchain()->IsPhonyTargetNeeded(dep.value())) {
       out_ << "build ";
       path_output_.WriteFile(out_, dep);
-      out_ << ": phony\n";
+      out_ << ": " << BuiltinTool::kBuiltinToolPhony << "\n";
     }
     // Add data dep to outs
     outs.push_back(OutputFile(settings_->build_settings(), *source));
