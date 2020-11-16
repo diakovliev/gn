@@ -993,6 +993,11 @@ const char kData_Help[] =
   dependencies, they do not affect which targets are built or when. To declare
   input files to a script, use "inputs".
 
+  Zodiac specific behaviour: GN doesn't require data files to exist at gen-time,
+  but ninja will require data files exist at build-time for particular targets!
+  The build system implementation must ensure that the data files exist before
+  the target that requires them is called.
+
   Appearing in the "data" section does not imply any special handling such as
   copying them to the output directory. This is just used for declaring runtime
   dependencies. Runtime dependencies can be queried using the "runtime_deps"
