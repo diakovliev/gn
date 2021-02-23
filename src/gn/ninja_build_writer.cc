@@ -113,6 +113,15 @@ base::CommandLine GetSelfInvocationCommandLine(
     }
   }
 
+  // Add the regeneration switch if not already present. This is so that when
+  // the regeneration is invoked by ninja, the gen command is aware that it is a
+  // regeneration invocation and not an user invocation. This allows the gen
+  // command to elide ninja post processing steps that ninja will perform
+  // itself.
+  if (!cmdline.HasSwitch(switches::kRegeneration)) {
+    cmdline.AppendSwitch(switches::kRegeneration);
+  }
+
   return cmdline;
 }
 
@@ -281,6 +290,8 @@ void NinjaBuildWriter::WriteNinjaRules() {
        << build_settings_->ninja_required_version().Describe() << "\n\n";
   out_ << "rule gn\n";
   out_ << "  command = " << GetSelfInvocationCommand(build_settings_) << "\n";
+  // Putting gn rule to console pool for colorful output on regeneration
+  out_ << "  pool = console\n";
   out_ << "  description = Regenerating ninja files\n\n";
 
   // This rule will regenerate the ninja files when any input file has changed.
@@ -595,11 +606,8 @@ bool NinjaBuildWriter::WritePhonyAndAllRules(Err* err) {
     EscapeOptions ninja_escape;
     ninja_escape.mode = ESCAPE_NINJA;
     for (const Target* target : default_toolchain_targets_) {
-      if (target->dependency_output_file_or_phony()) {
-        out_ << " $\n    ";
-        path_output_.WriteFile(out_,
-                               *target->dependency_output_file_or_phony());
-      }
+      out_ << " $\n    ";
+      path_output_.WriteFile(out_, target->dependency_output_file());
     }
   }
   out_ << std::endl;
@@ -608,13 +616,9 @@ bool NinjaBuildWriter::WritePhonyAndAllRules(Err* err) {
     // Use the short name when available
     if (written_rules.find("default") != written_rules.end()) {
       out_ << "\ndefault default" << std::endl;
-    } else if (default_target->dependency_output_file_or_phony()) {
-      // If the default target does not have a dependency output file or phony,
-      // then the target specified as default is a no-op. We omit the default
-      // statement entirely to avoid ninja runtime failure.
+    } else {
       out_ << "\ndefault ";
-      path_output_.WriteFile(
-          out_, *default_target->dependency_output_file_or_phony());
+      path_output_.WriteFile(out_, default_target->dependency_output_file());
       out_ << std::endl;
     }
   } else if (!default_toolchain_targets_.empty()) {
@@ -632,12 +636,7 @@ void NinjaBuildWriter::WritePhonyRule(const Target* target,
   // Escape for special chars Ninja will handle.
   std::string escaped = EscapeString(phony_name, ninja_escape, nullptr);
 
-  // If the target doesn't have a dependency_output_file_or_phony, we should
-  // still emit the phony rule, but with no dependencies. This allows users to
-  // continue to use the phony rule, but it will effectively be a no-op.
   out_ << "build " << escaped << ": phony ";
-  if (target->dependency_output_file_or_phony()) {
-    path_output_.WriteFile(out_, *target->dependency_output_file_or_phony());
-  }
+  path_output_.WriteFile(out_, target->dependency_output_file());
   out_ << std::endl;
 }

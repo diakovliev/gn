@@ -470,8 +470,7 @@ Tool variables
         {{target_output_name}}, {{output_extension}} and {{output_dir}} allows
         the target to override these values.
           outputs = [
-            "{{output_dir}}/{{target_output_name}}"
-                "{{output_extension}}",
+            "{{output_dir}}/{{target_output_name}}{{output_extension}}",
             "{{output_dir}}/{{target_output_name}}.lib",
           ]
 
@@ -793,7 +792,7 @@ Tool variables
 
   The Swift tool has multiple input and outputs. It must have exactly one
   output of .swiftmodule type, but can have one or more object file outputs,
-  in addition to other type of ouputs. The following expansions are available:
+  in addition to other type of outputs. The following expansions are available:
 
     {{module_name}}
         Expands to the string representing the module name of target under
@@ -854,14 +853,12 @@ Separate linking and dependencies for shared libraries
       command = "..."
       outputs = [
         "{{output_dir}}/{{target_output_name}}{{output_extension}}",
-        "{{output_dir}}/{{target_output_name}}"
-            "{{output_extension}}.TOC",
+        "{{output_dir}}/{{target_output_name}}{{output_extension}}.TOC",
       ]
       link_output =
         "{{output_dir}}/{{target_output_name}}{{output_extension}}"
       depend_output =
-        "{{output_dir}}/{{target_output_name}}"
-            "{{output_extension}}.TOC"
+        "{{output_dir}}/{{target_output_name}}{{output_extension}}.TOC"
       restat = true
     }
 

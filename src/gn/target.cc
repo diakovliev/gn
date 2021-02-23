@@ -7,7 +7,6 @@
 #include <stddef.h>
 #include <fstream>
 #include <algorithm>
-
 #include "base/stl_util.h"
 #include "base/files/file_util.h"
 #include "base/strings/string_util.h"
@@ -439,12 +438,16 @@ bool Target::IsFinal() const {
          output_type_ == LOADABLE_MODULE || output_type_ == ACTION ||
          output_type_ == ACTION_FOREACH || output_type_ == COPY_FILES ||
          output_type_ == CREATE_BUNDLE || output_type_ == RUST_PROC_MACRO ||
-         (output_type_ == STATIC_LIBRARY &&
-          (complete_static_lib_ ||
-           // Rust static libraries may be used from C/C++ code and therefore
-           // require all dependencies to be linked in as we cannot link their
-           // (Rust) dependencies directly as we would for C/C++.
-           source_types_used_.RustSourceUsed()));
+         (output_type_ == STATIC_LIBRARY && complete_static_lib_);
+}
+
+bool Target::IsDataOnly() const {
+  // BUNDLE_DATA exists only to declare inputs to subsequent CREATE_BUNDLE
+  // targets. Changing only contents of the bundle data target should not cause
+  // a binary to be re-linked. It should affect only the CREATE_BUNDLE steps
+  // instead. As a result, normal targets should treat this as a data
+  // dependency.
+  return output_type_ == BUNDLE_DATA;
 }
 
 DepsIteratorRange Target::GetDeps(DepsIterationType type) const {
@@ -525,7 +528,8 @@ bool Target::GetOutputsAsSourceFiles(const LocationRange& loc_for_error,
     if (!bundle_data().GetOutputsAsSourceFiles(settings(), this, outputs, err))
       return false;
   } else if (IsBinary() && output_type() != Target::SOURCE_SET) {
-    // Binary target with normal outputs (source sets have phony targets).
+    // Binary target with normal outputs (source sets have stamp outputs like
+    // groups).
     DCHECK(IsBinary()) << static_cast<int>(output_type());
     if (!build_complete) {
       // Can't access the toolchain for a target before the build is complete.
@@ -545,20 +549,15 @@ bool Target::GetOutputsAsSourceFiles(const LocationRange& loc_for_error,
           output_file.AsSourceFile(settings()->build_settings()));
     }
   } else {
-    // Everything else (like a group or bundle_data) has a stamp or phony
-    // output. The dependency output file should have computed what this is.
-    // This won't be valid unless the build is complete.
+    // Everything else (like a group or bundle_data) has a stamp output. The
+    // dependency output file should have computed what this is. This won't be
+    // valid unless the build is complete.
     if (!build_complete) {
       *err = Err(loc_for_error, kBuildIncompleteMsg);
       return false;
     }
-
-    // The dependency output might be empty if there is no output file or a
-    // phony alias for a set of inputs.
-    if (dependency_output_file_or_phony()) {
-      outputs->push_back(dependency_output_file_or_phony()->AsSourceFile(
-          settings()->build_settings()));
-    }
+    outputs->push_back(
+        dependency_output_file().AsSourceFile(settings()->build_settings()));
   }
   return true;
 }
@@ -789,48 +788,14 @@ void Target::PullRecursiveBundleData() {
   bundle_data_.OnTargetResolved(this);
 }
 
-bool Target::HasRealInputs() const {
-  // This check is only necessary if this target will result in a phony target.
-  // Phony targets with no real inputs are treated as always dirty.
-
-  // TODO(bug 194): This method is currently just checking the relevant inputs
-  // for the current list of output types that result in phony targets. As the
-  // list of phony targets expands, this method should be updated to properly
-  // account for which inputs matter for the given output type.
-
-  // If any of this target's dependencies is non-phony target or a phony target
-  // with real inputs, then this target should be considered to have inputs.
-  for (const auto& pair : GetDeps(DEPS_ALL)) {
-    if (pair.ptr->dependency_output_file_or_phony()) {
-      return true;
-    }
-  }
-
-  // If any of this target's sources will result in output files, then this
-  // target should be considered to have real inputs.
-  std::vector<OutputFile> tool_outputs;
-  return std::any_of(
-      sources().begin(), sources().end(), [&, this](const auto& source) {
-        const char* tool_name = Tool::kToolNone;
-        return GetOutputFilesForSource(source, &tool_name, &tool_outputs);
-      });
-}
-
 bool Target::FillOutputFiles(Err* err) {
   const Tool* tool = toolchain_->GetToolForTargetFinalOutput(this);
   bool check_tool_outputs = false;
   switch (output_type_) {
-    case SOURCE_SET: {
-      if (HasRealInputs()) {
-        dependency_output_phony_ =
-            GetBuildDirForTargetAsOutputFile(this, BuildDirType::PHONY);
-        dependency_output_phony_->value().append(GetComputedOutputName());
-      }
-      break;
-    }
     case GROUP:
     case BUNDLE_DATA:
     case CREATE_BUNDLE:
+    case SOURCE_SET:
     case COPY_FILES:
     case ACTION:
     case ACTION_FOREACH:
@@ -840,8 +805,8 @@ bool Target::FillOutputFiles(Err* err) {
       // "<target_out_dir>/<targetname>.stamp".
       dependency_output_file_ =
           GetBuildDirForTargetAsOutputFile(this, BuildDirType::OBJ);
-      dependency_output_file_->value().append(GetComputedOutputName());
-      dependency_output_file_->value().append(".stamp");
+      dependency_output_file_.value().append(GetComputedOutputName());
+      dependency_output_file_.value().append(".stamp");
       break;
     }
     case EXECUTABLE:
@@ -856,7 +821,7 @@ bool Target::FillOutputFiles(Err* err) {
 
       if (tool->runtime_outputs().list().empty()) {
         // Default to the first output for the runtime output.
-        runtime_outputs_.push_back(*dependency_output_file_);
+        runtime_outputs_.push_back(dependency_output_file_);
       } else {
         SubstitutionWriter::ApplyListToLinkerAsOutputFile(
             this, tool, tool->runtime_outputs(), &runtime_outputs_);
@@ -868,10 +833,9 @@ bool Target::FillOutputFiles(Err* err) {
       // first output.
       CHECK(tool->outputs().list().size() >= 1);
       check_tool_outputs = true;
-      dependency_output_file_ =
+      link_output_file_ = dependency_output_file_ =
           SubstitutionWriter::ApplyPatternToLinkerAsOutputFile(
               this, tool, tool->outputs().list()[0]);
-      link_output_file_ = *dependency_output_file_;
       break;
     case RUST_PROC_MACRO:
     case SHARED_LIBRARY:
@@ -880,10 +844,9 @@ bool Target::FillOutputFiles(Err* err) {
       if (const CTool* ctool = tool->AsC()) {
         if (ctool->link_output().empty() && ctool->depend_output().empty()) {
           // Default behavior, use the first output file for both.
-          dependency_output_file_ =
+          link_output_file_ = dependency_output_file_ =
               SubstitutionWriter::ApplyPatternToLinkerAsOutputFile(
                   this, tool, tool->outputs().list()[0]);
-          link_output_file_ = *dependency_output_file_;
         } else {
           // Use the tool-specified ones.
           if (!ctool->link_output().empty()) {
@@ -906,10 +869,9 @@ bool Target::FillOutputFiles(Err* err) {
         }
       } else if (const RustTool* rstool = tool->AsRust()) {
         // Default behavior, use the first output file for both.
-        dependency_output_file_ =
+        link_output_file_ = dependency_output_file_ =
             SubstitutionWriter::ApplyPatternToLinkerAsOutputFile(
                 this, tool, tool->outputs().list()[0]);
-        link_output_file_ = *dependency_output_file_;
       }
       break;
     case UNKNOWN:

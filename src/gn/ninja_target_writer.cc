@@ -8,7 +8,6 @@
 
 #include "base/files/file_util.h"
 #include "base/strings/string_util.h"
-#include "gn/builtin_tool.h"
 #include "gn/config_values_extractors.h"
 #include "gn/err.h"
 #include "gn/escape.h"
@@ -248,8 +247,14 @@ std::vector<OutputFile> NinjaTargetWriter::WriteInputDepsStampAndGetDep(
   // Hard dependencies that are direct or indirect dependencies.
   // These are large (up to 100s), hence why we check other
   const std::set<const Target*>& hard_deps(target_->recursive_hard_deps());
-  for (const Target* target : hard_deps)
-    input_deps_targets.push_back(target);
+  for (const Target* target : hard_deps) {
+    // BUNDLE_DATA should normally be treated as a data-only dependency
+    // (see Target::IsDataOnly()). Only the CREATE_BUNDLE target, that actually
+    // consumes this data, needs to have the BUNDLE_DATA as an input dependency.
+    if (target->output_type() != Target::BUNDLE_DATA ||
+        target_->output_type() == Target::CREATE_BUNDLE)
+      input_deps_targets.push_back(target);
+  }
 
   // Extra hard dependencies passed in. These are usually empty or small, and
   // we don't want to duplicate the explicit hard deps of the target.
@@ -282,12 +287,10 @@ std::vector<OutputFile> NinjaTargetWriter::WriteInputDepsStampAndGetDep(
   if (data_deps_sources.size() == 0 && input_deps_sources.size() == 1 && input_deps_targets.size() == 0)
     return std::vector<OutputFile>{
         OutputFile(settings_->build_settings(), *input_deps_sources[0])};
-  if (data_deps_sources.size() == 0 && input_deps_sources.size() == 0 && input_deps_targets.size() == 1) {
-    const std::optional<OutputFile>& dep =
-        input_deps_targets[0]->dependency_output_file_or_phony();
-    if (!dep)
-      return std::vector<OutputFile>();
-    return std::vector<OutputFile>{*dep};
+  if (input_deps_sources.size() == 0 && input_deps_sources.size() == 0 && input_deps_targets.size() == 1) {
+    const OutputFile& dep = input_deps_targets[0]->dependency_output_file();
+    DCHECK(!dep.value().empty());
+    return std::vector<OutputFile>{dep};
   }
 
   std::vector<OutputFile> outs;
@@ -301,8 +304,8 @@ std::vector<OutputFile> NinjaTargetWriter::WriteInputDepsStampAndGetDep(
       input_deps_targets.begin(), input_deps_targets.end(),
       [](const Target* a, const Target* b) { return a->label() < b->label(); });
   for (auto* dep : input_deps_targets) {
-    if (dep->dependency_output_file_or_phony())
-      outs.push_back(*dep->dependency_output_file_or_phony());
+    DCHECK(!dep->dependency_output_file().value().empty());
+    outs.push_back(dep->dependency_output_file());
   }
 
   // File data deps.
@@ -312,7 +315,7 @@ std::vector<OutputFile> NinjaTargetWriter::WriteInputDepsStampAndGetDep(
     if (target_->toolchain()->IsPhonyTargetNeeded(dep.value())) {
       out_ << "build ";
       path_output_.WriteFile(out_, dep);
-      out_ << ": " << BuiltinTool::kBuiltinToolPhony << "\n";
+      out_ << ": phony\n";
     }
     // Add data dep to outs
     outs.push_back(OutputFile(settings_->build_settings(), *source));
@@ -342,8 +345,7 @@ std::vector<OutputFile> NinjaTargetWriter::WriteInputDepsStampAndGetDep(
 void NinjaTargetWriter::WriteStampForTarget(
     const std::vector<OutputFile>& files,
     const std::vector<OutputFile>& order_only_deps) {
-  CHECK(target_->dependency_output_file());
-  const OutputFile& stamp_file = *target_->dependency_output_file();
+  const OutputFile& stamp_file = target_->dependency_output_file();
 
   // First validate that the target's dependency is a stamp file. Otherwise,
   // we shouldn't have gotten here!
@@ -401,8 +403,8 @@ void NinjaTargetWriter::WriteStampForTarget(
         const auto& pair = target_->dyndeps().deps()[i];
         out_ << " dep" << i << " = ";
         out_ << "'" << pair.label.GetUserVisibleName(false) << ";";
-        DCHECK(pair.ptr->dependency_output_file_or_phony());
-        path_output_.WriteFile(out_, *pair.ptr->dependency_output_file_or_phony());
+        DCHECK(!pair.ptr->dependency_output_file().value().empty());
+        path_output_.WriteFile(out_, pair.ptr->dependency_output_file());
         out_ << "'" << std::endl;
     }
     out_ << std::endl;
@@ -431,31 +433,5 @@ void NinjaTargetWriter::WriteStampForTarget(
     path_output_.WriteFile(out_, dd);
   }
 
-  out_ << std::endl;
-}
-
-void NinjaTargetWriter::WritePhonyForTarget(
-    const std::vector<OutputFile>& files,
-    const std::vector<OutputFile>& order_only_deps) {
-  // If there's no phony, then we should not have any inputs and it is okay to
-  // omit the build rule.
-  if (!target_->dependency_output_phony()) {
-    CHECK(files.empty());
-    CHECK(order_only_deps.empty());
-    return;
-  }
-  const OutputFile& phony_target = *target_->dependency_output_phony();
-  CHECK(!phony_target.value().empty());
-
-  out_ << "build ";
-  path_output_.WriteFile(out_, phony_target);
-
-  out_ << ": " << BuiltinTool::kBuiltinToolPhony;
-  path_output_.WriteFiles(out_, files);
-
-  if (!order_only_deps.empty()) {
-    out_ << " ||";
-    path_output_.WriteFiles(out_, order_only_deps);
-  }
   out_ << std::endl;
 }

@@ -81,7 +81,7 @@ const char kVersionStringVs2015[] = "Visual Studio 2015";  // Visual Studio 2015
 const char kVersionStringVs2017[] = "Visual Studio 2017";  // Visual Studio 2017
 const char kVersionStringVs2019[] = "Visual Studio 2019";  // Visual Studio 2019
 const char kWindowsKitsVersion[] = "10";                   // Windows 10 SDK
-const char kWindowsKitsDefaultVersion[] = "10.0.17134.0";  // Windows 10 SDK
+const char kWindowsKitsDefaultVersion[] = "10";            // Windows 10 SDK
 
 const char kGuidTypeProject[] = "{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}";
 const char kGuidTypeFolder[] = "{2150E333-8FDC-42A3-9474-1A3956D46DE8}";
@@ -521,14 +521,14 @@ bool VisualStudioWriter::WriteProjectFileContents(
 
   project.SubElement("PropertyGroup", XmlAttributes("Label", "UserMacros"));
 
-  auto [ninja_target, ninja_target_is_phony] = GetNinjaTarget(target);
+  std::string ninja_target = GetNinjaTarget(target);
 
   {
     std::unique_ptr<XmlElementWriter> properties =
         project.SubElement("PropertyGroup");
     properties->SubElement("OutDir")->Text("$(SolutionDir)");
     properties->SubElement("TargetName")->Text("$(ProjectName)");
-    if (target->output_type() != Target::GROUP && !ninja_target_is_phony) {
+    if (target->output_type() != Target::GROUP) {
       properties->SubElement("TargetPath")->Text("$(OutDir)\\" + ninja_target);
     }
   }
@@ -904,20 +904,13 @@ void VisualStudioWriter::ResolveSolutionFolders() {
   }
 }
 
-std::pair<std::string, bool> VisualStudioWriter::GetNinjaTarget(const Target* target) {
+std::string VisualStudioWriter::GetNinjaTarget(const Target* target) {
   std::ostringstream ninja_target_out;
-  bool is_phony = false;
-  OutputFile output_file;
-  if (target->dependency_output_file()) {
-    output_file = *target->dependency_output_file();
-  } else if (target->dependency_output_phony()) {
-    output_file = *target->dependency_output_phony();
-    is_phony = true;
-  }
-
-  ninja_path_output_.WriteFile(ninja_target_out, output_file);
+  DCHECK(!target->dependency_output_file().value().empty());
+  ninja_path_output_.WriteFile(ninja_target_out,
+                               target->dependency_output_file());
   std::string s = ninja_target_out.str();
   if (s.compare(0, 2, "./") == 0)
     s = s.substr(2);
-  return std::make_pair(s, is_phony);
+  return s;
 }

@@ -102,9 +102,9 @@ std::vector<OutputFile> NinjaBinaryTargetWriter::WriteInputsStampAndGetDep(
   return {stamp_file};
 }
 
-void NinjaBinaryTargetWriter::WriteSourceSetPhony(
+void NinjaBinaryTargetWriter::WriteSourceSetStamp(
     const std::vector<OutputFile>& object_files) {
-  // The phony rule for source sets is generally not used, since targets that
+  // The stamp rule for source sets is generally not used, since targets that
   // depend on this will reference the object files directly. However, writing
   // this rule allows the user to type the name of the target and get a build
   // which can be convenient for development.
@@ -116,12 +116,10 @@ void NinjaBinaryTargetWriter::WriteSourceSetPhony(
   DCHECK(classified_deps.extra_object_files.empty());
 
   std::vector<OutputFile> order_only_deps;
-  for (auto* dep : classified_deps.non_linkable_deps) {
-    if (dep->dependency_output_file_or_phony())
-      order_only_deps.push_back(*dep->dependency_output_file_or_phony());
-  }
+  for (auto* dep : classified_deps.non_linkable_deps)
+    order_only_deps.push_back(dep->dependency_output_file());
 
-  WritePhonyForTarget(object_files, order_only_deps);
+  WriteStampForTarget(object_files, order_only_deps);
 }
 
 NinjaBinaryTargetWriter::ClassifiedDeps
@@ -161,14 +159,22 @@ void NinjaBinaryTargetWriter::ClassifyDependency(
   if (can_link_libs && dep->swift_values().builds_module())
     classified_deps->swiftmodule_deps.push_back(dep);
 
-  if (dep->output_type() == Target::SOURCE_SET ||
-      // If a complete static library depends on an incomplete static library,
-      // manually link in the object files of the dependent library as if it
-      // were a source set. This avoids problems with braindead tools such as
-      // ar which don't properly link dependent static libraries.
-      (target_->complete_static_lib() &&
-       (dep->output_type() == Target::STATIC_LIBRARY &&
-        !dep->complete_static_lib()))) {
+  if (target_->source_types_used().RustSourceUsed() &&
+      (target_->output_type() == Target::RUST_LIBRARY ||
+       target_->output_type() == Target::STATIC_LIBRARY) &&
+      dep->IsLinkable()) {
+    // Rust libraries and static libraries aren't final, but need to have the
+    // link lines of all transitive deps specified.
+    classified_deps->linkable_deps.push_back(dep);
+  } else if (dep->output_type() == Target::SOURCE_SET ||
+             // If a complete static library depends on an incomplete static
+             // library, manually link in the object files of the dependent
+             // library as if it were a source set. This avoids problems with
+             // braindead tools such as ar which don't properly link dependent
+             // static libraries.
+             (target_->complete_static_lib() &&
+              (dep->output_type() == Target::STATIC_LIBRARY &&
+               !dep->complete_static_lib()))) {
     // Source sets have their object files linked into final targets
     // (shared libraries, executables, loadable modules, and complete static
     // libraries). Intermediate static libraries and other source sets
@@ -179,16 +185,11 @@ void NinjaBinaryTargetWriter::ClassifyDependency(
       AddSourceSetFiles(dep, &classified_deps->extra_object_files);
 
     // Add the source set itself as a non-linkable dependency on the current
-    // target. This will make sure that anything the source set's phony target
+    // target. This will make sure that anything the source set's stamp file
     // depends on (like data deps) are also built before the current target
     // can be complete. Otherwise, these will be skipped since this target
     // will depend only on the source set's object files.
     classified_deps->non_linkable_deps.push_back(dep);
-  } else if (target_->output_type() == Target::RUST_LIBRARY &&
-             dep->IsLinkable()) {
-    // Rust libraries aren't final, but need to have the link lines of all
-    // transitive deps specified.
-    classified_deps->linkable_deps.push_back(dep);
   } else if (target_->complete_static_lib() && dep->IsFinal()) {
     classified_deps->non_linkable_deps.push_back(dep);
   } else if (can_link_libs && dep->IsLinkable()) {

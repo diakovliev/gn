@@ -11,7 +11,6 @@
 #include <mutex>
 
 #include "base/logging.h"
-#include "gn/builtin_tool.h"
 #include "gn/item.h"
 #include "gn/label_ptr.h"
 #include "gn/scope.h"
@@ -65,8 +64,6 @@ class Toolchain : public Item {
   const CTool* GetToolAsC(const char* name) const;
   RustTool* GetToolAsRust(const char* name);
   const RustTool* GetToolAsRust(const char* name) const;
-  BuiltinTool* GetToolAsBuiltin(const char* name);
-  const BuiltinTool* GetToolAsBuiltin(const char* name) const;
 
   // Set a tool. When all tools are configured, you should call
   // ToolchainSetupComplete().
@@ -98,7 +95,6 @@ class Toolchain : public Item {
   const CTool* GetToolForSourceTypeAsC(SourceFile::Type type) const;
   const GeneralTool* GetToolForSourceTypeAsGeneral(SourceFile::Type type) const;
   const RustTool* GetToolForSourceTypeAsRust(SourceFile::Type type) const;
-  const BuiltinTool* GetToolForSourceTypeAsBuiltin(SourceFile::Type type) const;
 
   // Returns the tool that produces the final output for the given target type.
   // This isn't necessarily the tool you would expect. For copy target, this
@@ -109,8 +105,6 @@ class Toolchain : public Item {
   const GeneralTool* GetToolForTargetFinalOutputAsGeneral(
       const Target* target) const;
   const RustTool* GetToolForTargetFinalOutputAsRust(const Target* target) const;
-  const BuiltinTool* GetToolForTargetFinalOutputAsBuiltin(
-      const Target* target) const;
 
   const SubstitutionBits& substitution_bits() const {
     DCHECK(setup_complete_);
@@ -127,7 +121,6 @@ class Toolchain : public Item {
   }
 
  private:
-  BuiltinTool phony_tool_;
   std::map<const char*, std::unique_ptr<Tool>> tools_;
 
   bool setup_complete_ = false;
