@@ -366,6 +366,10 @@ extern const char kXcodeExtraAttributes[];
 extern const char kXcodeExtraAttributes_HelpShort[];
 extern const char kXcodeExtraAttributes_Help[];
 
+extern const char kRestat[];
+extern const char kRestat_HelpShort[];
+extern const char kRestat_Help[];
+
 // -----------------------------------------------------------------------------
 
 struct VariableInfo {

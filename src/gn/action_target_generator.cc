@@ -51,6 +51,9 @@ void ActionTargetGenerator::DoRun() {
   if (!FillScriptBuildFlagsArgs())
     return;
 
+  if (!FillRestat())
+    return;
+
   if (!FillResponseFileContents())
     return;
 
@@ -142,6 +145,19 @@ bool ActionTargetGenerator::FillScriptBuildFlagsArgs() {
     return false;
 
   target_->set_build_flags_args(value->boolean_value());
+
+  return true;
+}
+
+bool ActionTargetGenerator::FillRestat() {
+  const Value* value = scope_->GetValue(variables::kRestat, true);
+  if (!value)
+    return true;  // Nothing to do.
+
+  if (!value->VerifyTypeIs(Value::BOOLEAN, err_))
+    return false;
+
+  target_->set_restat(value->boolean_value());
 
   return true;
 }

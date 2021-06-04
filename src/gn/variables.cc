@@ -1911,6 +1911,15 @@ MSVC precompiled headers
       ...
 )";
 
+const char kRestat[] = "restat";
+const char kRestat_HelpShort[] = "restat: set restat = 1 on action target.";
+const char kRestat_Help[] = R"(restat: [boolean] restat on action target.
+
+  Zodiac extension!
+
+  See ninja-build official documentation for explain target behavior.
+)";
+
 const char kPrecompiledHeaderType[] = "precompiled_header_type";
 const char kPrecompiledHeaderType_HelpShort[] =
     "precompiled_header_type: [string] \"gcc\" or \"msvc\".";
@@ -2485,6 +2494,7 @@ const VariableInfoMap& GetTargetVariables() {
     INSERT_VARIABLE(Arflags)
     INSERT_VARIABLE(Args)
     INSERT_VARIABLE(BuildFlagsArgs)
+    INSERT_VARIABLE(Restat)
     INSERT_VARIABLE(Asmflags)
     INSERT_VARIABLE(AssertNoDeps)
     INSERT_VARIABLE(BundleRootDir)

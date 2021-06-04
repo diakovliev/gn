@@ -218,7 +218,10 @@ void NinjaCBinaryTargetWriter::Run() {
       DCHECK_NE(static_cast<size_t>(-1), computed_obj.IndexOf(obj));
 #endif
   } else {
-    WriteLinkerStuff(obj_files, other_files, input_deps);
+    // Note: In case of linking order only dependencies must be converted to implicit
+    // dependencies! Otherwise changes in deps will not cause relinking binaries and will not
+    // trigger another dependent action such as copy, install etcs.
+    WriteLinkerStuff(obj_files, other_files, input_deps, /*implicit_input_deps*/ order_only_deps);
   }
 }
 
@@ -689,7 +692,9 @@ void NinjaCBinaryTargetWriter::WriteSwiftSources(
 void NinjaCBinaryTargetWriter::WriteLinkerStuff(
     const std::vector<OutputFile>& object_files,
     const std::vector<SourceFile>& other_files,
-    const std::vector<OutputFile>& input_deps) {
+    const std::vector<OutputFile>& input_deps,
+    const std::vector<OutputFile>& implicit_input_deps
+    ) {
   std::vector<OutputFile> output_files;
   SubstitutionWriter::ApplyListToLinkerAsOutputFile(
       target_, tool_, tool_->outputs(), &output_files);
@@ -707,7 +712,7 @@ void NinjaCBinaryTargetWriter::WriteLinkerStuff(
   path_output_.WriteFiles(out_, classified_deps.extra_object_files);
 
   // Dependencies.
-  std::vector<OutputFile> implicit_deps;
+  std::vector<OutputFile> implicit_deps(implicit_input_deps.begin(), implicit_input_deps.end());
   std::vector<OutputFile> solibs;
   for (const Target* cur : classified_deps.linkable_deps) {
     // All linkable deps should have a link output file.

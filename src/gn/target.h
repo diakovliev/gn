@@ -289,6 +289,9 @@ class Target : public Item {
   bool build_flags_args() const { return build_flags_args_; }
   void set_build_flags_args(bool value) { build_flags_args_ = value; }
 
+  bool restat() const { return restat_; }
+  void set_restat(bool value) { restat_ = value; }
+
   SwiftValues& swift_values() { return swift_values_; }
   const SwiftValues& swift_values() const { return swift_values_; }
 
@@ -524,6 +527,9 @@ class Target : public Item {
 
   // Dyndeps
   Dyndeps dyndeps_;
+
+  // Restat
+  bool restat_ = true;
 
   DISALLOW_COPY_AND_ASSIGN(Target);
 };

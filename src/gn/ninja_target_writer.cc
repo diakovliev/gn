@@ -276,33 +276,39 @@ std::vector<OutputFile> NinjaTargetWriter::WriteInputDepsStampAndGetDep(
     input_deps_targets.push_back(toolchain_dep.ptr);
   }
 
+  // Target input deps. Sort by label so the output is deterministic (otherwise
+  // some of the targets will have gone through std::sets which will have
+  // sorted them by pointer).
+  if (!input_deps_targets.empty())
+      std::sort(
+          input_deps_targets.begin(), input_deps_targets.end(),
+          [](const Target* a, const Target* b) { return a->label() < b->label(); });
+
   // ---------
   // Write the outputs.
 
-  if (input_deps_sources.size() + data_deps_sources.size() + input_deps_targets.size() == 0)
-    return std::vector<OutputFile>();  // No input dependencies.
 
+#if 0
   // If we're only generating one input dependency, return it directly instead
   // of writing a stamp file for it.
   if (data_deps_sources.size() == 0 && input_deps_sources.size() == 1 && input_deps_targets.size() == 0)
     return std::vector<OutputFile>{
         OutputFile(settings_->build_settings(), *input_deps_sources[0])};
+
   if (input_deps_sources.size() == 0 && input_deps_sources.size() == 0 && input_deps_targets.size() == 1) {
     const OutputFile& dep = input_deps_targets[0]->dependency_output_file();
     DCHECK(!dep.value().empty());
     return std::vector<OutputFile>{dep};
   }
+#endif
 
   std::vector<OutputFile> outs;
-  // File input deps.
+  if (input_deps_sources.size() + data_deps_sources.size() + input_deps_targets.size() == 0)
+    return outs;  // No input dependencies.
+
   for (const SourceFile* source : input_deps_sources)
     outs.push_back(OutputFile(settings_->build_settings(), *source));
-  // Target input deps. Sort by label so the output is deterministic (otherwise
-  // some of the targets will have gone through std::sets which will have
-  // sorted them by pointer).
-  std::sort(
-      input_deps_targets.begin(), input_deps_targets.end(),
-      [](const Target* a, const Target* b) { return a->label() < b->label(); });
+
   for (auto* dep : input_deps_targets) {
     DCHECK(!dep->dependency_output_file().value().empty());
     outs.push_back(dep->dependency_output_file());
@@ -336,7 +342,10 @@ std::vector<OutputFile> NinjaTargetWriter::WriteInputDepsStampAndGetDep(
   path_output_.WriteFile(out_, input_stamp_file);
   out_ << ": " << GetNinjaRulePrefixForToolchain(settings_)
        << GeneralTool::kGeneralToolStamp;
-  path_output_.WriteFiles(out_, outs);
+  if (!outs.empty()) {
+    out_ << "| ";
+    path_output_.WriteFiles(out_, outs);
+  }
 
   out_ << "\n";
   return std::vector<OutputFile>{input_stamp_file};

@@ -87,7 +87,8 @@ class NinjaCBinaryTargetWriter : public NinjaBinaryTargetWriter {
 
   void WriteLinkerStuff(const std::vector<OutputFile>& object_files,
                         const std::vector<SourceFile>& other_files,
-                        const std::vector<OutputFile>& input_deps);
+                        const std::vector<OutputFile>& input_deps,
+                        const std::vector<OutputFile>& implicit_input_deps);
   void WriteOutputSubstitutions();
   void WriteLibsList(const std::string& label,
                      const std::vector<OutputFile>& libs);
